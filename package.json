@@ -1,0 +1,54 @@
+{
+  "name": "qub-json",
+  "version": "1.0.0",
+  "description": "A collection of classes and functions for interacting with JSON documents",
+  "main": "output/sources/Json",
+  "typings": "output/sources/Json",
+  "files": [
+    "output/sources/"
+  ],
+  "scripts": {
+    "build": "tsc -p .",
+    "prepublish": "npm run build",
+    "test": "mocha --colors --require source-map-support/register --ui tdd output/tests/",
+    "coverage": "nyc npm test && open-cli output/coverage/Json.ts.html",
+    "travis-test": "nyc --check-coverage --functions 100 --lines 100 --branches 100 --statements 100 --reporter=text-lcov npm test | coveralls"
+  },
+  "nyc": {
+    "reporter": [
+      "html",
+      "text-summary"
+    ],
+    "report-dir": "output/coverage/",
+    "temp-directory": "output/.nyc_output/",
+    "exclude": [
+      "output/tests"
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/danschultequb/qub-typescript-json.git"
+  },
+  "keywords": [
+    "qub"
+  ],
+  "author": "Dan Schulte",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/danschultequb/qub-typescript-json/issues"
+  },
+  "homepage": "https://github.com/danschultequb/qub-typescript-json#readme",
+  "devDependencies": {
+    "@types/mocha": "^2.2.41",
+    "@types/node": "^8.0.3",
+    "coveralls": "^2.13.1",
+    "mocha": "^3.4.2",
+    "nyc": "^11.0.3",
+    "open-cli": "^1.0.5",
+    "source-map-support": "^0.4.15",
+    "typescript": "^2.3.4"
+  },
+  "dependencies": {
+    "qub": "^1.2.2"
+  }
+}
