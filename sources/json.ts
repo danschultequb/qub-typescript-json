@@ -498,29 +498,74 @@ export class Tokenizer extends qub.IteratorBase<Token> {
  * between those segments.
  */
 export class Property extends Segment {
-    constructor(private _segments: Segment[]) {
-        super(_segments[0].startIndex);
+    constructor(private _segments: qub.Iterable<Segment>) {
+        super(_segments.first().startIndex);
     }
 
+    /**
+     * Get the quoted-string name Token for this Property.
+     */
+    public getName(): Token {
+        return this._segments.first() as Token;
+    }
+
+    /**
+     * Get the value Segment for this Property.
+     */
+    public getValue(): Segment {
+        let result: Segment;
+        if (this._segments.getCount() > 1) {
+            const lastSegment: Segment = this._segments.last();
+            if (lastSegment instanceof ArraySegment || lastSegment instanceof ObjectSegment) {
+                result = lastSegment;
+            }
+            else {
+                const lastToken: Token = lastSegment as Token;
+                switch (lastToken.getType()) {
+                    case TokenType.False:
+                    case TokenType.Null:
+                    case TokenType.Number:
+                    case TokenType.QuotedString:
+                    case TokenType.True:
+                        result = lastToken;
+                        break;
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Get the string representation of this Property.
+     */
     public toString(): string {
         return qub.getCombinedText(this._segments);
     }
 
+    /**
+     * Get the number of characters in the string representation of this Property.
+     */
     public getLength(): number {
         return qub.getContiguousLength(this._segments);
     }
 
+    /**
+     * Get the formatted (pretty-printed) string representation of this Property.
+     */
     public format(): string {
         let result: string = "";
 
-        for (let i: number = 0; i < this._segments.length; ++i) {
-            const segment: Segment = this._segments[i];
+        const segmentCount: number = this._segments.getCount();
+        let segmentIndex: number = 0;
+        for (const segment of this._segments) {
             if (!(segment instanceof Token) || segment.getType() !== TokenType.Whitespace) {
                 result += segment.format();
-                if (segment instanceof Token && segment.getType() === TokenType.Colon && i < this._segments.length - 1) {
+                if (segment instanceof Token && segment.getType() === TokenType.Colon && segmentIndex < segmentCount - 1) {
                     result += " ";
                 }
             }
+
+            ++segmentIndex;
         }
 
         return result;
@@ -762,9 +807,9 @@ export class Document {
     }
 }
 
-export function skipWhitespace(tokenizer: Tokenizer, values: Segment[]): void {
+export function skipWhitespace(tokenizer: Tokenizer, values: qub.List<Segment>): void {
     while (tokenizer.hasCurrent() && tokenizer.getCurrent().getType() === TokenType.Whitespace) {
-        values.push(tokenizer.getCurrent());
+        values.add(tokenizer.getCurrent());
         tokenizer.next();
     }
 }
@@ -775,10 +820,10 @@ export function skipWhitespace(tokenizer: Tokenizer, values: Segment[]): void {
  */
 export function parseProperty(tokenizer: Tokenizer, issues?: qub.List<qub.Issue>): Property {
     const propertyName: Token = tokenizer.getCurrent();
-    const propertyValues: Segment[] = [propertyName];
+    const propertySegments = new qub.ArrayList<Segment>([propertyName]);
     tokenizer.next();
 
-    skipWhitespace(tokenizer, propertyValues);
+    skipWhitespace(tokenizer, propertySegments);
 
     if (!tokenizer.hasCurrent()) {
         addIssue(issues, qub.Error(`Missing colon (":").`, propertyName.span));
@@ -789,10 +834,10 @@ export function parseProperty(tokenizer: Tokenizer, issues?: qub.List<qub.Issue>
             addIssue(issues, qub.Error(`Expected colon (":").`, colon.span));
         }
         else {
-            propertyValues.push(colon);
+            propertySegments.add(colon);
             tokenizer.next();
 
-            skipWhitespace(tokenizer, propertyValues);
+            skipWhitespace(tokenizer, propertySegments);
 
             if (!tokenizer.hasCurrent()) {
                 addIssue(issues, qub.Error(`Missing property value.`, colon.span));
@@ -805,16 +850,16 @@ export function parseProperty(tokenizer: Tokenizer, issues?: qub.List<qub.Issue>
                     case TokenType.Null:
                     case TokenType.QuotedString:
                     case TokenType.Number:
-                        propertyValues.push(propertyValueFirstToken);
+                        propertySegments.add(propertyValueFirstToken);
                         tokenizer.next();
                         break;
 
                     case TokenType.LeftCurlyBracket:
-                        propertyValues.push(parseObject(tokenizer, issues));
+                        propertySegments.add(parseObject(tokenizer, issues));
                         break;
 
                     case TokenType.LeftSquareBracket:
-                        propertyValues.push(parseArray(tokenizer, issues));
+                        propertySegments.add(parseArray(tokenizer, issues));
                         break;
 
                     default:
@@ -825,7 +870,7 @@ export function parseProperty(tokenizer: Tokenizer, issues?: qub.List<qub.Issue>
         }
     }
 
-    return new Property(propertyValues);
+    return new Property(propertySegments);
 }
 
 /**
