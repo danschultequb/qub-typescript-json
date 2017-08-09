@@ -165,32 +165,34 @@ export function Unrecognized(basicToken: qub.Lex, startIndex: number): Token {
 }
 
 /**
+ * Add the provided issue to the list of issues. If the list of issues is not defined, then nothing with happen.
+ * @param issues The list to add the issue to.
+ * @param toAdd The issue to add.
+ */
+function addIssue(issues: qub.List<qub.Issue>, toAdd: qub.Issue) {
+    if (issues) {
+        issues.add(toAdd);
+    }
+}
+
+/**
  * A JSON Tokenizer that converts an input text into a sequence of JSON Segments. Everything that
  * the tokenizer returns will be composed of basic Tokens (Colons, QuotedStrings, Whitespace). Any
  * JSON structure that contains other JSON segments (Objects and Arrays) will be returned from
  * the JSON parse() methods.
  */
-export class Tokenizer {
+export class Tokenizer extends qub.IteratorBase<Token> {
     private _tokenizer: qub.Lexer;
     private _currentBasicTokenStartIndex: number;
 
     private _currentToken: Token;
     private _currentTokenStartIndex: number;
 
-    private _issues: qub.ArrayList<qub.Issue>;
+    constructor(text: string, startIndex: number = 0, private _issues?: qub.List<qub.Issue>) {
+        super();
 
-    constructor(text: string, startIndex: number = 0) {
         this._tokenizer = new qub.Lexer(text, startIndex);
         this._currentTokenStartIndex = startIndex;
-        this._issues = new qub.ArrayList<qub.Issue>();
-    }
-
-    public get issues(): qub.Iterable<qub.Issue> {
-        return this._issues;
-    }
-
-    public addIssue(issue: qub.Issue): void {
-        this._issues.add(issue);
     }
 
     /**
@@ -227,6 +229,10 @@ export class Tokenizer {
             this._currentBasicTokenStartIndex += this.currentBasicToken.getLength();
         }
         return this._tokenizer.next();
+    }
+
+    private addIssue(issue: qub.Issue): void {
+        addIssue(this._issues, issue);
     }
 
     public next(): boolean {
@@ -634,11 +640,7 @@ export class ArraySegment extends Segment {
 }
 
 export class Document {
-    constructor(private _segments: Segment[], private _issues: qub.Iterable<qub.Issue>) {
-    }
-
-    public get issues(): qub.Iterable<qub.Issue> {
-        return this._issues;
+    constructor(private _segments: Segment[]) {
     }
 
     public format(): string {
@@ -673,7 +675,7 @@ export function skipWhitespace(tokenizer: Tokenizer, values: Segment[]): void {
  * Parse a JSON Property from the provided Tokenizer. The Tokenizer's current segment must be a
  * QuotedString segment.
  */
-export function parseProperty(tokenizer: Tokenizer): Property {
+export function parseProperty(tokenizer: Tokenizer, issues?: qub.List<qub.Issue>): Property {
     const propertyName: Token = tokenizer.getCurrent();
     const propertyValues: Segment[] = [propertyName];
     tokenizer.next();
@@ -681,12 +683,12 @@ export function parseProperty(tokenizer: Tokenizer): Property {
     skipWhitespace(tokenizer, propertyValues);
 
     if (!tokenizer.hasCurrent()) {
-        tokenizer.addIssue(qub.Error(`Missing colon (":").`, propertyName.span));
+        addIssue(issues, qub.Error(`Missing colon (":").`, propertyName.span));
     }
     else {
         const colon: Token = tokenizer.getCurrent();
         if (colon.getType() !== TokenType.Colon) {
-            tokenizer.addIssue(qub.Error(`Expected colon (":").`, colon.span));
+            addIssue(issues, qub.Error(`Expected colon (":").`, colon.span));
         }
         else {
             propertyValues.push(colon);
@@ -695,7 +697,7 @@ export function parseProperty(tokenizer: Tokenizer): Property {
             skipWhitespace(tokenizer, propertyValues);
 
             if (!tokenizer.hasCurrent()) {
-                tokenizer.addIssue(qub.Error(`Missing property value.`, colon.span));
+                addIssue(issues, qub.Error(`Missing property value.`, colon.span));
             }
             else {
                 const propertyValueFirstToken: Token = tokenizer.getCurrent();
@@ -710,15 +712,15 @@ export function parseProperty(tokenizer: Tokenizer): Property {
                         break;
 
                     case TokenType.LeftCurlyBracket:
-                        propertyValues.push(parseObject(tokenizer));
+                        propertyValues.push(parseObject(tokenizer, issues));
                         break;
 
                     case TokenType.LeftSquareBracket:
-                        propertyValues.push(parseArray(tokenizer));
+                        propertyValues.push(parseArray(tokenizer, issues));
                         break;
 
                     default:
-                        tokenizer.addIssue(qub.Error(`Expected property value.`, propertyValueFirstToken.span));
+                        addIssue(issues, qub.Error(`Expected property value.`, propertyValueFirstToken.span));
                         break;
                 }
             }
@@ -732,7 +734,7 @@ export function parseProperty(tokenizer: Tokenizer): Property {
  * Parse a JSON ObjectSegment from the provided Tokenizer. The Tokenizer's current segment must be a
  * LeftCurlyBracket token.
  */
-export function parseObject(tokenizer: Tokenizer): ObjectSegment {
+export function parseObject(tokenizer: Tokenizer, issues: qub.List<qub.Issue>): ObjectSegment {
     const leftCurlyBracket: Token = tokenizer.getCurrent();
     const objectSegments: Segment[] = [leftCurlyBracket];
     tokenizer.next();
@@ -748,10 +750,10 @@ export function parseObject(tokenizer: Tokenizer): ObjectSegment {
         switch (currentToken.getType()) {
             case TokenType.QuotedString:
                 if (!propertyNameAllowed) {
-                    tokenizer.addIssue(qub.Error(`Expected comma (",") or closing right curly bracket ("}").`, currentToken.span));
+                    addIssue(issues, qub.Error(`Expected comma (",") or closing right curly bracket ("}").`, currentToken.span));
                 }
 
-                objectSegments.push(parseProperty(tokenizer));
+                objectSegments.push(parseProperty(tokenizer, issues));
 
                 propertyNameAllowed = false;
                 commaAllowed = true;
@@ -762,7 +764,7 @@ export function parseObject(tokenizer: Tokenizer): ObjectSegment {
                 objectSegments.push(currentToken);
                 rightCurlyBracket = currentToken;
                 if (!rightCurlyBracketAllowed) {
-                    tokenizer.addIssue(qub.Error(`Expected property name.`, currentToken.span));
+                    addIssue(issues, qub.Error(`Expected property name.`, currentToken.span));
                 }
                 tokenizer.next();
                 break;
@@ -779,10 +781,10 @@ export function parseObject(tokenizer: Tokenizer): ObjectSegment {
                 objectSegments.push(currentToken);
                 if (!commaAllowed) {
                     if (!rightCurlyBracketAllowed) {
-                        tokenizer.addIssue(qub.Error(`Expected property name.`, currentToken.span));
+                        addIssue(issues, qub.Error(`Expected property name.`, currentToken.span));
                     }
                     else {
-                        tokenizer.addIssue(qub.Error(`Expected property name or closing right curly bracket ("}").`, currentToken.span));
+                        addIssue(issues, qub.Error(`Expected property name or closing right curly bracket ("}").`, currentToken.span));
                     }
                 }
                 propertyNameAllowed = true;
@@ -795,10 +797,10 @@ export function parseObject(tokenizer: Tokenizer): ObjectSegment {
                 objectSegments.push(currentToken);
                 if (propertyNameAllowed) {
                     if (rightCurlyBracketAllowed) {
-                        tokenizer.addIssue(qub.Error(`Expected property name or closing right curly bracket ("}").`, currentToken.span));
+                        addIssue(issues, qub.Error(`Expected property name or closing right curly bracket ("}").`, currentToken.span));
                     }
                     else {
-                        tokenizer.addIssue(qub.Error(`Expected property name.`, currentToken.span));
+                        addIssue(issues, qub.Error(`Expected property name.`, currentToken.span));
 
                         // If I get an unexpected segment after a comma, then allow a right
                         // curly bracket for the next segment.
@@ -806,7 +808,7 @@ export function parseObject(tokenizer: Tokenizer): ObjectSegment {
                     }
                 }
                 else {
-                    tokenizer.addIssue(qub.Error(`Expected comma (",") or closing right curly bracket ("}").`, currentToken.span));
+                    addIssue(issues, qub.Error(`Expected comma (",") or closing right curly bracket ("}").`, currentToken.span));
                 }
                 tokenizer.next();
                 break;
@@ -814,13 +816,13 @@ export function parseObject(tokenizer: Tokenizer): ObjectSegment {
     }
 
     if (!rightCurlyBracket) {
-        tokenizer.addIssue(qub.Error(`Missing closing right curly bracket ("}").`, leftCurlyBracket.span));
+        addIssue(issues, qub.Error(`Missing closing right curly bracket ("}").`, leftCurlyBracket.span));
     }
 
     return new ObjectSegment(objectSegments);
 }
 
-export function parseArray(tokenizer: Tokenizer): ArraySegment {
+export function parseArray(tokenizer: Tokenizer, issues: qub.List<qub.Issue>): ArraySegment {
     const leftSquareBracket: Token = tokenizer.getCurrent();
     const arraySegments: Segment[] = [leftSquareBracket];
     tokenizer.next();
@@ -838,7 +840,7 @@ export function parseArray(tokenizer: Tokenizer): ArraySegment {
             case TokenType.QuotedString:
             case TokenType.Number:
                 if (!arrayElementAllowed) {
-                    tokenizer.addIssue(qub.Error(`Expected comma (",") or closing right square bracket ("]").`, currentToken.span));
+                    addIssue(issues, qub.Error(`Expected comma (",") or closing right square bracket ("]").`, currentToken.span));
                 }
 
                 arraySegments.push(currentToken);
@@ -851,10 +853,10 @@ export function parseArray(tokenizer: Tokenizer): ArraySegment {
 
             case TokenType.LeftCurlyBracket:
                 if (!arrayElementAllowed) {
-                    tokenizer.addIssue(qub.Error(`Expected comma (",") or closing right square bracket ("]").`, currentToken.span));
+                    addIssue(issues, qub.Error(`Expected comma (",") or closing right square bracket ("]").`, currentToken.span));
                 }
 
-                arraySegments.push(parseObject(tokenizer));
+                arraySegments.push(parseObject(tokenizer, issues));
 
                 arrayElementAllowed = false;
                 commaAllowed = true;
@@ -863,10 +865,10 @@ export function parseArray(tokenizer: Tokenizer): ArraySegment {
 
             case TokenType.LeftSquareBracket:
                 if (!arrayElementAllowed) {
-                    tokenizer.addIssue(qub.Error(`Expected comma (",") or closing right square bracket ("]").`, currentToken.span));
+                    addIssue(issues, qub.Error(`Expected comma (",") or closing right square bracket ("]").`, currentToken.span));
                 }
 
-                arraySegments.push(parseArray(tokenizer));
+                arraySegments.push(parseArray(tokenizer, issues));
 
                 arrayElementAllowed = false;
                 commaAllowed = true;
@@ -876,10 +878,10 @@ export function parseArray(tokenizer: Tokenizer): ArraySegment {
             case TokenType.Comma:
                 if (!commaAllowed) {
                     if (rightSquareBracketAllowed) {
-                        tokenizer.addIssue(qub.Error(`Expected array element or closing right square bracket ("]").`, currentToken.span));
+                        addIssue(issues, qub.Error(`Expected array element or closing right square bracket ("]").`, currentToken.span));
                     }
                     else {
-                        tokenizer.addIssue(qub.Error(`Expected array element.`, currentToken.span));
+                        addIssue(issues, qub.Error(`Expected array element.`, currentToken.span));
                     }
                 }
 
@@ -893,7 +895,7 @@ export function parseArray(tokenizer: Tokenizer): ArraySegment {
 
             case TokenType.RightSquareBracket:
                 if (!rightSquareBracketAllowed) {
-                    tokenizer.addIssue(qub.Error(`Expected array element.`, currentToken.span));
+                    addIssue(issues, qub.Error(`Expected array element.`, currentToken.span));
                 }
 
                 rightSquareBracket = currentToken;
@@ -912,14 +914,14 @@ export function parseArray(tokenizer: Tokenizer): ArraySegment {
             default:
                 if (arrayElementAllowed) {
                     if (rightSquareBracketAllowed) {
-                        tokenizer.addIssue(qub.Error(`Expected array element or closing right square bracket ("]").`, currentToken.span));
+                        addIssue(issues, qub.Error(`Expected array element or closing right square bracket ("]").`, currentToken.span));
                     }
                     else {
-                        tokenizer.addIssue(qub.Error(`Expected array element.`, currentToken.span));
+                        addIssue(issues, qub.Error(`Expected array element.`, currentToken.span));
                     }
                 }
                 else {
-                    tokenizer.addIssue(qub.Error(`Expected comma (",") or closing right square bracket ("]").`, currentToken.span));
+                    addIssue(issues, qub.Error(`Expected comma (",") or closing right square bracket ("]").`, currentToken.span));
                 }
 
                 arraySegments.push(currentToken);
@@ -933,22 +935,22 @@ export function parseArray(tokenizer: Tokenizer): ArraySegment {
     }
 
     if (!rightSquareBracket) {
-        tokenizer.addIssue(qub.Error(`Missing closing right square bracket ("]").`, leftSquareBracket.span));
+        addIssue(issues, qub.Error(`Missing closing right square bracket ("]").`, leftSquareBracket.span));
     }
 
     return new ArraySegment(arraySegments);
 }
 
-export function parseSegment(tokenizer: Tokenizer): Segment {
+export function parseSegment(tokenizer: Tokenizer, issues: qub.List<qub.Issue>): Segment {
     let result: Segment;
 
     switch (tokenizer.getCurrent().getType()) {
         case TokenType.LeftCurlyBracket:
-            result = parseObject(tokenizer);
+            result = parseObject(tokenizer, issues);
             break;
 
         case TokenType.LeftSquareBracket:
-            result = parseArray(tokenizer);
+            result = parseArray(tokenizer, issues);
             break;
 
         default:
@@ -960,15 +962,20 @@ export function parseSegment(tokenizer: Tokenizer): Segment {
     return result;
 }
 
-export function parse(text: string): Document {
+/**
+ * Parse the provided document text into a parsed JSON Document.
+ * @param text The document text to parse.
+ * @param issues The list where issues will be added if any are found while parsing.
+ */
+export function parse(text: string, issues: qub.List<qub.Issue>): Document {
     const documentSegments: Segment[] = [];
 
-    const tokenizer = new Tokenizer(text);
+    const tokenizer = new Tokenizer(text, 0, issues);
     tokenizer.next();
 
     let foundRootSegment: boolean = false;
     while (tokenizer.hasCurrent()) {
-        const segment: Segment = parseSegment(tokenizer);
+        const segment: Segment = parseSegment(tokenizer, issues);
         documentSegments.push(segment);
 
         if (segment instanceof ObjectSegment ||
@@ -977,7 +984,7 @@ export function parse(text: string): Document {
                 foundRootSegment = true;
             }
             else {
-                tokenizer.addIssue(qub.Error(`Expected end of file.`, segment.span));
+                addIssue(issues, qub.Error(`Expected end of file.`, segment.span));
             }
         }
         else {
@@ -992,12 +999,12 @@ export function parse(text: string): Document {
                         foundRootSegment = true;
                     }
                     else {
-                        tokenizer.addIssue(qub.Error(`Expected end of file.`, segment.span));
+                        addIssue(issues, qub.Error(`Expected end of file.`, segment.span));
                     }
                     break;
             }
         }
     }
 
-    return new Document(documentSegments, tokenizer.issues);
+    return new Document(documentSegments);
 }
