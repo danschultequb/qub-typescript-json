@@ -493,6 +493,10 @@ export class Tokenizer extends qub.IteratorBase<Token> {
     }
 }
 
+/**
+ * A parsed property within a JSON object. This includes the name, colon, value, and any whitespace
+ * between those segments.
+ */
 export class Property extends Segment {
     constructor(private _segments: Segment[]) {
         super(_segments[0].startIndex);
@@ -523,9 +527,21 @@ export class Property extends Segment {
     }
 }
 
+/**
+ * A parsed JSON object.
+ */
 export class ObjectSegment extends Segment {
-    constructor(private _segments: Segment[]) {
-        super(_segments[0].startIndex);
+    constructor(private _segments: qub.Iterable<Segment>) {
+        super(_segments.first().startIndex);
+    }
+
+    /**
+     * Get the properties within this JSON object.
+     */
+    public getProperties(): qub.Iterable<Property> {
+        return this._segments
+            .where((segment: Segment) => segment instanceof Property)
+            .map((segment: Segment) => segment as Property);
     }
 
     public toString(): string {
@@ -818,7 +834,7 @@ export function parseProperty(tokenizer: Tokenizer, issues?: qub.List<qub.Issue>
  */
 export function parseObject(tokenizer: Tokenizer, issues: qub.List<qub.Issue>): ObjectSegment {
     const leftCurlyBracket: Token = tokenizer.getCurrent();
-    const objectSegments: Segment[] = [leftCurlyBracket];
+    const objectSegments = new qub.ArrayList<Segment>([leftCurlyBracket]);
     tokenizer.next();
 
     let rightCurlyBracket: Token;
@@ -835,7 +851,7 @@ export function parseObject(tokenizer: Tokenizer, issues: qub.List<qub.Issue>): 
                     addIssue(issues, qub.Error(`Expected comma (",") or closing right curly bracket ("}").`, currentToken.span));
                 }
 
-                objectSegments.push(parseProperty(tokenizer, issues));
+                objectSegments.add(parseProperty(tokenizer, issues));
 
                 propertyNameAllowed = false;
                 commaAllowed = true;
@@ -843,7 +859,7 @@ export function parseObject(tokenizer: Tokenizer, issues: qub.List<qub.Issue>): 
                 break;
 
             case TokenType.RightCurlyBracket:
-                objectSegments.push(currentToken);
+                objectSegments.add(currentToken);
                 rightCurlyBracket = currentToken;
                 if (!rightCurlyBracketAllowed) {
                     addIssue(issues, qub.Error(`Expected property name.`, currentToken.span));
@@ -855,12 +871,12 @@ export function parseObject(tokenizer: Tokenizer, issues: qub.List<qub.Issue>): 
             case TokenType.Whitespace:
             case TokenType.LineComment:
             case TokenType.BlockComment:
-                objectSegments.push(currentToken);
+                objectSegments.add(currentToken);
                 tokenizer.next();
                 break;
 
             case TokenType.Comma:
-                objectSegments.push(currentToken);
+                objectSegments.add(currentToken);
                 if (!commaAllowed) {
                     if (!rightCurlyBracketAllowed) {
                         addIssue(issues, qub.Error(`Expected property name.`, currentToken.span));
@@ -876,7 +892,7 @@ export function parseObject(tokenizer: Tokenizer, issues: qub.List<qub.Issue>): 
                 break;
 
             default:
-                objectSegments.push(currentToken);
+                objectSegments.add(currentToken);
                 if (propertyNameAllowed) {
                     if (rightCurlyBracketAllowed) {
                         addIssue(issues, qub.Error(`Expected property name or closing right curly bracket ("}").`, currentToken.span));

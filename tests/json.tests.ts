@@ -541,7 +541,7 @@ suite("json", () => {
         });
 
         test("with empty", () => {
-            assert.throws(() => { new json.ObjectSegment([]); });
+            assert.throws(() => { new json.ObjectSegment(new qub.ArrayList<json.Segment>()); });
         });
 
         function objectTest(objectSegments: json.Segment[], expectedFormattedString: string): void {
@@ -549,7 +549,7 @@ suite("json", () => {
             const expectedStartIndex: number = objectSegments[0].startIndex;
             const expectedLength: number = qub.getCombinedLength(objectSegments);
             test(`with ${qub.escapeAndQuote(expectedText)}`, () => {
-                const property = new json.ObjectSegment(objectSegments);
+                const property = new json.ObjectSegment(new qub.ArrayList<json.Segment>(objectSegments));
                 assert.deepStrictEqual(property.toString(), expectedText);
                 assert.deepStrictEqual(property.format(), expectedFormattedString);
                 assert.deepStrictEqual(property.startIndex, expectedStartIndex);
@@ -750,48 +750,53 @@ suite("json", () => {
     });
 
     suite("parseObject()", () => {
-        function parseObjectTest(text: string, expectedObjectSegments: json.Segment[], expectedIssues: qub.Issue[] = []): void {
-            const expectedObject = new json.ObjectSegment(expectedObjectSegments);
-
+        function parseObjectTest(text: string, expectedObjectSegments: json.Segment[], expectedProperties: json.Property[] = [], expectedIssues: qub.Issue[] = []): void {
             test(`with ${qub.escapeAndQuote(text)}`, () => {
                 const issues = new qub.ArrayList<qub.Issue>();
                 const tokenizer = new json.Tokenizer(text, 0, issues);
                 tokenizer.next();
 
                 const object: json.ObjectSegment = json.parseObject(tokenizer, issues);
-                assert.deepStrictEqual(object, expectedObject);
+                assert.deepStrictEqual(object, new json.ObjectSegment(new qub.ArrayList<json.Segment>(expectedObjectSegments)));
+                assert.deepStrictEqual(object.getProperties().toArray(), expectedProperties);
                 assert.deepStrictEqual(issues.toArray(), expectedIssues);
             });
         }
 
-        parseObjectTest(`{`, [json.LeftCurlyBracket(0)], [qub.Error(`Missing closing right curly bracket ("}").`, new qub.Span(0, 1))]);
+        parseObjectTest(`{`, [json.LeftCurlyBracket(0)], [], [qub.Error(`Missing closing right curly bracket ("}").`, new qub.Span(0, 1))]);
         parseObjectTest(`{}`, [json.LeftCurlyBracket(0), json.RightCurlyBracket(1)]);
         parseObjectTest(`{  }`, [json.LeftCurlyBracket(0), parseWhitespace("  ", 1), json.RightCurlyBracket(3)]);
         parseObjectTest(`{"age"`, [json.LeftCurlyBracket(0), parseProperty(`"age"`, 1)],
+            [parseProperty(`"age"`, 1)],
             [
                 qub.Error(`Missing colon (":").`, new qub.Span(1, 5)),
                 qub.Error(`Missing closing right curly bracket ("}").`, new qub.Span(0, 1))
             ]);
         parseObjectTest(`{"age"  `, [json.LeftCurlyBracket(0), parseProperty(`"age"  `, 1)],
+            [parseProperty(`"age"  `, 1)],
             [
                 qub.Error(`Missing colon (":").`, new qub.Span(1, 5)),
                 qub.Error(`Missing closing right curly bracket ("}").`, new qub.Span(0, 1))
             ]);
         parseObjectTest(`{"age":`, [json.LeftCurlyBracket(0), parseProperty(`"age":`, 1)],
+            [parseProperty(`"age":`, 1)],
             [
                 qub.Error(`Missing property value.`, new qub.Span(6, 1)),
                 qub.Error(`Missing closing right curly bracket ("}").`, new qub.Span(0, 1))
             ]);
-        parseObjectTest(`{"age":20}`, [json.LeftCurlyBracket(0), parseProperty(`"age":20`, 1), json.RightCurlyBracket(9)])
+        parseObjectTest(`{"age":20}`, [json.LeftCurlyBracket(0), parseProperty(`"age":20`, 1), json.RightCurlyBracket(9)], [parseProperty(`"age":20`, 1)])
         parseObjectTest(`{"age":20,}`, [json.LeftCurlyBracket(0), parseProperty(`"age":20`, 1), json.Comma(9), json.RightCurlyBracket(10)],
+            [parseProperty(`"age":20`, 1)],
             [
                 qub.Error(`Expected property name.`, new qub.Span(10, 1))
             ]);
         parseObjectTest(`{"age":20 "name":"Dan"}`, [json.LeftCurlyBracket(0), parseProperty(`"age":20`, 1), parseWhitespace(" ", 9), parseProperty(`"name":"Dan"`, 10), json.RightCurlyBracket(22)],
+            [parseProperty(`"age":20`, 1), parseProperty(`"name":"Dan"`, 10)],
             [
                 qub.Error(`Expected comma (",") or closing right curly bracket ("}").`, new qub.Span(10, 6))
             ]);
         parseObjectTest(`{,,,,}`, [json.LeftCurlyBracket(0), json.Comma(1), json.Comma(2), json.Comma(3), json.Comma(4), json.RightCurlyBracket(5)],
+            [],
             [
                 qub.Error(`Expected property name or closing right curly bracket ("}").`, new qub.Span(1, 1)),
                 qub.Error(`Expected property name.`, new qub.Span(2, 1)),
@@ -800,14 +805,17 @@ suite("json", () => {
                 qub.Error(`Expected property name.`, new qub.Span(5, 1))
             ]);
         parseObjectTest(`{(}`, [json.LeftCurlyBracket(0), json.Unrecognized(qub.LeftParenthesis(1), 1), json.RightCurlyBracket(2)],
+            [],
             [
                 qub.Error(`Expected property name or closing right curly bracket ("}").`, new qub.Span(1, 1))
             ]);
         parseObjectTest(`{"a":0(}`, [json.LeftCurlyBracket(0), parseProperty(`"a":0`, 1), json.Unrecognized(qub.LeftParenthesis(6), 6), json.RightCurlyBracket(7)],
+            [parseProperty(`"a":0`, 1)],
             [
                 qub.Error(`Expected comma (",") or closing right curly bracket ("}").`, new qub.Span(6, 1))
             ]);
         parseObjectTest(`{"a":0,(}`, [json.LeftCurlyBracket(0), parseProperty(`"a":0`, 1), json.Comma(6), json.Unrecognized(qub.LeftParenthesis(7), 7), json.RightCurlyBracket(8)],
+            [parseProperty(`"a":0`, 1)],
             [
                 qub.Error(`Expected property name.`, new qub.Span(7, 1))
             ]);
@@ -821,7 +829,8 @@ suite("json", () => {
                 parseProperty(`"b":1`, 9),
                 parseNewLine("\n", 14),
                 json.RightCurlyBracket(15)
-            ]);
+            ],
+            [parseProperty(`"a":0`, 2), parseProperty(`"b":1`, 9)]);
 
         parseObjectTest(`{50}`,
             [
@@ -829,6 +838,7 @@ suite("json", () => {
                 parseNumber("50", 1),
                 json.RightCurlyBracket(3)
             ],
+            [],
             [
                 qub.Error(`Expected property name or closing right curly bracket (\"}\").`, new qub.Span(1, 2))
             ]);
@@ -841,6 +851,7 @@ suite("json", () => {
                 parseNumber("50", 9),
                 json.RightCurlyBracket(11)
             ],
+            [parseProperty(`"a":"B"`, 1)],
             [
                 qub.Error(`Expected comma (",") or closing right curly bracket (\"}\").`, new qub.Span(9, 2))
             ]);
@@ -854,6 +865,7 @@ suite("json", () => {
                 parseNumber("50", 10),
                 json.RightCurlyBracket(12)
             ],
+            [parseProperty(`"a":"B"`, 1)],
             [
                 qub.Error(`Expected property name.`, new qub.Span(10, 2))
             ]);
@@ -867,7 +879,8 @@ suite("json", () => {
                 parseLineComment("// Line Comment", 11),
                 parseNewLine("\n", 26),
                 json.RightCurlyBracket(27)
-            ]);
+            ],
+            [parseProperty(`"a":"B"`, 4)]);
         parseObjectTest(`{\n  "a":"B",// Line Comment\n}`,
             [
                 json.LeftCurlyBracket(0),
@@ -879,6 +892,7 @@ suite("json", () => {
                 parseNewLine("\n", 27),
                 json.RightCurlyBracket(28)
             ],
+            [parseProperty(`"a":"B"`, 4)],
             [
                 qub.Error(`Expected property name.`, new qub.Span(28, 1))
             ]);
@@ -892,6 +906,7 @@ suite("json", () => {
                 json.Comma(11),
                 parseBlockComment("/* Block Comment\n}", 12)
             ],
+            [parseProperty(`"a":"B"`, 4)],
             [
                 qub.Error(`Missing closing right curly bracket ("}").`, new qub.Span(0, 1))
             ]);
@@ -905,7 +920,8 @@ suite("json", () => {
                 parseBlockComment("/* Block Comment*/", 11),
                 parseNewLine("\n", 29),
                 json.RightCurlyBracket(30)
-            ]);
+            ],
+            [parseProperty(`"a":"B"`, 4)]);
     });
 
     suite("parseArray()", () => {
