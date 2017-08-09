@@ -639,10 +639,28 @@ export class ArraySegment extends Segment {
     }
 }
 
+/**
+ * A parsed JSON document.
+ */
 export class Document {
-    constructor(private _segments: Segment[]) {
+    constructor(private _segments: qub.Iterable<Segment>) {
     }
 
+    /**
+     * Get the root Segment of this JSON document.
+     */
+    public getRoot(): Segment {
+        return !this._segments ? undefined : this._segments.first((segment: Segment) =>
+            segment instanceof ObjectSegment ||
+            segment instanceof ArraySegment ||
+            (segment instanceof Token &&
+                segment.getType() !== TokenType.NewLine &&
+                segment.getType() !== TokenType.Whitespace));
+    }
+
+    /**
+     * Get the formatted (or pretty-printed) JSON document's contents.
+     */
     public format(): string {
         let result: string = "";
 
@@ -655,10 +673,16 @@ export class Document {
         return result;
     }
 
+    /**
+     * Get the string representation of this JSON document.
+     */
     public toString(): string {
         return qub.getCombinedText(this._segments);
     }
 
+    /**
+     * Get the number of characters in this JSON document.
+     */
     public getLength(): number {
         return qub.getContiguousLength(this._segments);
     }
@@ -968,7 +992,7 @@ export function parseSegment(tokenizer: Tokenizer, issues: qub.List<qub.Issue>):
  * @param issues The list where issues will be added if any are found while parsing.
  */
 export function parse(text: string, issues: qub.List<qub.Issue>): Document {
-    const documentSegments: Segment[] = [];
+    const documentSegments = new qub.ArrayList<Segment>();
 
     const tokenizer = new Tokenizer(text, 0, issues);
     tokenizer.next();
@@ -976,7 +1000,7 @@ export function parse(text: string, issues: qub.List<qub.Issue>): Document {
     let foundRootSegment: boolean = false;
     while (tokenizer.hasCurrent()) {
         const segment: Segment = parseSegment(tokenizer, issues);
-        documentSegments.push(segment);
+        documentSegments.add(segment);
 
         if (segment instanceof ObjectSegment ||
             segment instanceof ArraySegment) {

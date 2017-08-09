@@ -638,16 +638,24 @@ suite("json", () => {
         function documentTest(documentSegments: json.Segment[], formattedText: string = qub.getCombinedText(documentSegments)): void {
             const expectedText: string = qub.getCombinedText(documentSegments);
             test(`with ${qub.escapeAndQuote(expectedText)}`, () => {
-                const document = new json.Document(documentSegments);
+                const segments: qub.Iterable<json.Segment> =
+                    documentSegments === undefined ? undefined :
+                        documentSegments === null ? null :
+                            new qub.ArrayList<json.Segment>(documentSegments);
+
+                const document = new json.Document(segments);
                 assert.deepStrictEqual(document.toString(), expectedText);
                 assert.deepStrictEqual(document.format(), formattedText);
                 assert.deepStrictEqual(document.getLength(), qub.getCombinedLength(documentSegments));
+                assert.deepStrictEqual(document.getRoot(), documentSegments ? documentSegments[0] : undefined);
             });
         }
 
         documentTest(null);
         documentTest(undefined);
         documentTest([]);
+        documentTest([parseQuotedString(`"hello"`)]);
+        documentTest([parseNumber(`1927`)]);
         documentTest([parseObject("{", 7)]);
         documentTest([parseObject(`{}`, 3)]);
         documentTest([parseObject(`{ }`, 10)], `{}`);
@@ -1074,7 +1082,11 @@ suite("json", () => {
     suite("parse()", () => {
         function parseTest(text: string, expectedDocumentSegments: json.Segment[], expectedIssues: qub.Issue[] = []): void {
             test(`with ${qub.escapeAndQuote(text)}`, () => {
-                const expectedDocument = new json.Document(expectedDocumentSegments);
+                const expectedSegments: qub.Iterable<json.Segment> =
+                    expectedDocumentSegments === undefined ? undefined :
+                        expectedDocumentSegments === null ? null :
+                            new qub.ArrayList<json.Segment>(expectedDocumentSegments);
+                const expectedDocument = new json.Document(expectedSegments);
 
                 const issues = new qub.ArrayList<qub.Issue>();
                 const document: json.Document = json.parse(text, issues);
