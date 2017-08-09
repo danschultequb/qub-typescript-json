@@ -507,7 +507,7 @@ suite("json", () => {
         });
 
         test("with empty", () => {
-            assert.throws(() => { new json.Property([]); });
+            assert.throws(() => { new json.Property(new qub.ArrayList<json.Segment>()); });
         });
 
         function propertyTest(propertySegments: json.Segment[], formattedText: string = qub.getCombinedText(propertySegments)): void {
@@ -515,7 +515,7 @@ suite("json", () => {
                 const expectedStartIndex: number = propertySegments[0].startIndex;
                 const expectedLength: number = qub.getCombinedLength(propertySegments);
 
-                const property = new json.Property(propertySegments);
+                const property = new json.Property(new qub.ArrayList<json.Segment>(propertySegments));
                 assert.deepStrictEqual(property.toString(), qub.getCombinedText(propertySegments));
                 assert.deepStrictEqual(property.format(), formattedText);
                 assert.deepStrictEqual(property.startIndex, expectedStartIndex);
@@ -670,10 +670,10 @@ suite("json", () => {
     suite("skipWhitespace()", () => {
         test("before tokenizer starts", () => {
             const tokenizer = new json.Tokenizer("300");
-            const values: json.Segment[] = [];
-            json.skipWhitespace(tokenizer, values);
+            const segments = new qub.ArrayList<json.Segment>();
+            json.skipWhitespace(tokenizer, segments);
             assert.deepStrictEqual(tokenizer.hasStarted(), false);
-            assert.deepStrictEqual(values, []);
+            assert.deepStrictEqual(segments.toArray(), []);
         });
 
         test("when tokenizer is currently pointing at a non-whitespace segment", () => {
@@ -683,13 +683,13 @@ suite("json", () => {
             assert.deepStrictEqual(tokenizer.hasCurrent(), true);
             assert.deepStrictEqual(tokenizer.getCurrent(), parseNumber("300", 0));
 
-            const values: json.Segment[] = [];
-            json.skipWhitespace(tokenizer, values);
+            const segments = new qub.ArrayList<json.Segment>();
+            json.skipWhitespace(tokenizer, segments);
 
             assert.deepStrictEqual(tokenizer.hasStarted(), true);
             assert.deepStrictEqual(tokenizer.hasCurrent(), true);
             assert.deepStrictEqual(tokenizer.getCurrent(), parseNumber("300", 0));
-            assert.deepStrictEqual(values, []);
+            assert.deepStrictEqual(segments.toArray(), []);
         });
 
         test("when tokenizer is currently pointing at a whitespace segment", () => {
@@ -699,19 +699,19 @@ suite("json", () => {
             assert.deepStrictEqual(tokenizer.hasCurrent(), true);
             assert.deepStrictEqual(tokenizer.getCurrent(), parseWhitespace("    ", 0));
 
-            const values: json.Segment[] = [];
-            json.skipWhitespace(tokenizer, values);
+            const segments = new qub.ArrayList<json.Segment>();
+            json.skipWhitespace(tokenizer, segments);
 
             assert.deepStrictEqual(tokenizer.hasStarted(), true);
             assert.deepStrictEqual(tokenizer.hasCurrent(), false);
             assert.deepStrictEqual(tokenizer.getCurrent(), undefined);
-            assert.deepStrictEqual(values, [parseWhitespace("    ", 0)]);
+            assert.deepStrictEqual(segments.toArray(), [parseWhitespace("    ", 0)]);
         });
     });
 
     suite("parseProperty()", () => {
-        function parsePropertyTest(text: string, expectedPropertySegments: json.Segment[], expectedIssues: qub.Issue[] = []): void {
-            const expectedProperty = new json.Property(expectedPropertySegments);
+        function parsePropertyTest(text: string, expectedPropertySegments: json.Segment[], expectedPropertyValue?: json.Segment, expectedIssues: qub.Issue[] = []): void {
+            const expectedProperty = new json.Property(new qub.ArrayList<json.Segment>(expectedPropertySegments));
 
             test(`with ${qub.escapeAndQuote(text)}`, () => {
                 const issues = new qub.ArrayList<qub.Issue>();
@@ -720,30 +720,34 @@ suite("json", () => {
 
                 const property: json.Property = json.parseProperty(tokenizer, issues);
                 assert.deepStrictEqual(property, expectedProperty);
+                assert.deepStrictEqual(property.getName(), expectedPropertySegments[0]);
+                assert.deepStrictEqual(property.getValue(), expectedPropertyValue);
                 assert.deepStrictEqual(issues.toArray(), expectedIssues);
             });
         }
 
-        parsePropertyTest(`"a"`, [parseQuotedString(`"a"`)], [qub.Error(`Missing colon (":").`, new qub.Span(0, 3))]);
-        parsePropertyTest(`"a"  `, [parseQuotedString(`"a"`), parseWhitespace("  ", 3)], [qub.Error(`Missing colon (":").`, new qub.Span(0, 3))]);
-        parsePropertyTest(`"a"1`, [parseQuotedString(`"a"`)], [qub.Error(`Expected colon (":").`, new qub.Span(3, 1))]);
-        parsePropertyTest(`"a":`, [parseQuotedString(`"a"`), json.Colon(3)], [qub.Error(`Missing property value.`, new qub.Span(3, 1))]);
-        parsePropertyTest(`"a":"A"`, [parseQuotedString(`"a"`), json.Colon(3), parseQuotedString(`"A"`, 4)]);
-        parsePropertyTest(`"a" : "A"`, [parseQuotedString(`"a"`), parseWhitespace(" ", 3), json.Colon(4), parseWhitespace(" ", 5), parseQuotedString(`"A"`, 6)]);
-        parsePropertyTest(`"a":false`, [parseQuotedString(`"a"`), json.Colon(3), json.False(4)]);
-        parsePropertyTest(`"a":true`, [parseQuotedString(`"a"`), json.Colon(3), json.True(4)]);
-        parsePropertyTest(`"a":null`, [parseQuotedString(`"a"`), json.Colon(3), json.Null(4)]);
-        parsePropertyTest(`"a":-30.7`, [parseQuotedString(`"a"`), json.Colon(3), parseNumber("-30.7", 4)]);
-        parsePropertyTest(`"a":{`, [parseQuotedString(`"a"`), json.Colon(3), parseObject("{", 4)], [qub.Error(`Missing closing right curly bracket ("}").`, new qub.Span(4, 1))]);
-        parsePropertyTest(`"a":{}`, [parseQuotedString(`"a"`), json.Colon(3), parseObject("{}", 4)]);
-        parsePropertyTest(`"a":[`, [parseQuotedString(`"a"`), json.Colon(3), parseArray("[", 4)], [qub.Error(`Missing closing right square bracket ("]").`, new qub.Span(4, 1))]);
-        parsePropertyTest(`"a":[]`, [parseQuotedString(`"a"`), json.Colon(3), parseArray("[]", 4)]);
+        parsePropertyTest(`"a"`, [parseQuotedString(`"a"`)], undefined, [qub.Error(`Missing colon (":").`, new qub.Span(0, 3))]);
+        parsePropertyTest(`"a"  `, [parseQuotedString(`"a"`), parseWhitespace("  ", 3)], undefined, [qub.Error(`Missing colon (":").`, new qub.Span(0, 3))]);
+        parsePropertyTest(`"a"1`, [parseQuotedString(`"a"`)], undefined, [qub.Error(`Expected colon (":").`, new qub.Span(3, 1))]);
+        parsePropertyTest(`"a":`, [parseQuotedString(`"a"`), json.Colon(3)], undefined, [qub.Error(`Missing property value.`, new qub.Span(3, 1))]);
+        parsePropertyTest(`"a":"A"`, [parseQuotedString(`"a"`), json.Colon(3), parseQuotedString(`"A"`, 4)], parseQuotedString(`"A"`, 4));
+        parsePropertyTest(`"a" : "A"`, [parseQuotedString(`"a"`), parseWhitespace(" ", 3), json.Colon(4), parseWhitespace(" ", 5), parseQuotedString(`"A"`, 6)], parseQuotedString(`"A"`, 6));
+        parsePropertyTest(`"a":false`, [parseQuotedString(`"a"`), json.Colon(3), json.False(4)], json.False(4));
+        parsePropertyTest(`"a":true`, [parseQuotedString(`"a"`), json.Colon(3), json.True(4)], json.True(4));
+        parsePropertyTest(`"a":null`, [parseQuotedString(`"a"`), json.Colon(3), json.Null(4)], json.Null(4));
+        parsePropertyTest(`"a":-30.7`, [parseQuotedString(`"a"`), json.Colon(3), parseNumber("-30.7", 4)], parseNumber("-30.7", 4));
+        parsePropertyTest(`"a":{`, [parseQuotedString(`"a"`), json.Colon(3), parseObject("{", 4)], parseObject("{", 4), [qub.Error(`Missing closing right curly bracket ("}").`, new qub.Span(4, 1))]);
+        parsePropertyTest(`"a":{}`, [parseQuotedString(`"a"`), json.Colon(3), parseObject("{}", 4)], parseObject("{}", 4));
+        parsePropertyTest(`"a":[`, [parseQuotedString(`"a"`), json.Colon(3), parseArray("[", 4)], parseArray("[", 4), [qub.Error(`Missing closing right square bracket ("]").`, new qub.Span(4, 1))]);
+        parsePropertyTest(`"a":[]`, [parseQuotedString(`"a"`), json.Colon(3), parseArray("[]", 4)], parseArray("[]", 4));
         parsePropertyTest(`"a":.`, [parseQuotedString(`"a"`), json.Colon(3), parseNumber(".", 4)],
+            parseNumber(".", 4),
             [
                 qub.Error(`Expected whole number digits.`, new qub.Span(4, 1)),
                 qub.Error(`Missing fractional number digits.`, new qub.Span(4, 1))
             ]);
         parsePropertyTest(`"a":<`, [parseQuotedString(`"a"`), json.Colon(3)],
+            undefined,
             [
                 qub.Error(`Expected property value.`, new qub.Span(4, 1))
             ]);
