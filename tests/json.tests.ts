@@ -594,7 +594,7 @@ suite("json", () => {
         });
 
         test("with empty", () => {
-            assert.throws(() => { new json.ArraySegment([]); });
+            assert.throws(() => { new json.ArraySegment(new qub.ArrayList<json.Segment>()); });
         });
 
         function arrayTest(arraySegments: json.Segment[], expectedFormattedString: string): void {
@@ -602,7 +602,7 @@ suite("json", () => {
             const expectedStartIndex: number = arraySegments[0].startIndex;
             const expectedLength: number = qub.getCombinedLength(arraySegments);
             test(`with ${qub.escapeAndQuote(expectedText)}`, () => {
-                const property = new json.ArraySegment(arraySegments);
+                const property = new json.ArraySegment(new qub.ArrayList<json.Segment>(arraySegments));
                 assert.deepStrictEqual(property.toString(), expectedText);
                 assert.deepStrictEqual(property.format(), expectedFormattedString);
                 assert.deepStrictEqual(property.startIndex, expectedStartIndex);
@@ -734,10 +734,10 @@ suite("json", () => {
         parsePropertyTest(`"a":true`, [parseQuotedString(`"a"`), json.Colon(3), json.True(4)]);
         parsePropertyTest(`"a":null`, [parseQuotedString(`"a"`), json.Colon(3), json.Null(4)]);
         parsePropertyTest(`"a":-30.7`, [parseQuotedString(`"a"`), json.Colon(3), parseNumber("-30.7", 4)]);
-        parsePropertyTest(`"a":{`, [parseQuotedString(`"a"`), json.Colon(3), new json.ObjectSegment([json.LeftCurlyBracket(4)])], [qub.Error(`Missing closing right curly bracket ("}").`, new qub.Span(4, 1))]);
-        parsePropertyTest(`"a":{}`, [parseQuotedString(`"a"`), json.Colon(3), new json.ObjectSegment([json.LeftCurlyBracket(4), json.RightCurlyBracket(5)])]);
-        parsePropertyTest(`"a":[`, [parseQuotedString(`"a"`), json.Colon(3), new json.ArraySegment([json.LeftSquareBracket(4)])], [qub.Error(`Missing closing right square bracket ("]").`, new qub.Span(4, 1))]);
-        parsePropertyTest(`"a":[]`, [parseQuotedString(`"a"`), json.Colon(3), new json.ArraySegment([json.LeftSquareBracket(4), json.RightSquareBracket(5)])]);
+        parsePropertyTest(`"a":{`, [parseQuotedString(`"a"`), json.Colon(3), parseObject("{", 4)], [qub.Error(`Missing closing right curly bracket ("}").`, new qub.Span(4, 1))]);
+        parsePropertyTest(`"a":{}`, [parseQuotedString(`"a"`), json.Colon(3), parseObject("{}", 4)]);
+        parsePropertyTest(`"a":[`, [parseQuotedString(`"a"`), json.Colon(3), parseArray("[", 4)], [qub.Error(`Missing closing right square bracket ("]").`, new qub.Span(4, 1))]);
+        parsePropertyTest(`"a":[]`, [parseQuotedString(`"a"`), json.Colon(3), parseArray("[]", 4)]);
         parsePropertyTest(`"a":.`, [parseQuotedString(`"a"`), json.Colon(3), parseNumber(".", 4)],
             [
                 qub.Error(`Expected whole number digits.`, new qub.Span(4, 1)),
@@ -909,8 +909,8 @@ suite("json", () => {
     });
 
     suite("parseArray()", () => {
-        function parseArrayTest(text: string, expectedArraySegments: json.Segment[], expectedIssues: qub.Issue[] = []): void {
-            const expectedArray = new json.ArraySegment(expectedArraySegments);
+        function parseArrayTest(text: string, expectedArraySegments: json.Segment[], expectedElements: json.Segment[] = [], expectedIssues: qub.Issue[] = []): void {
+            const expectedArray = new json.ArraySegment(new qub.ArrayList<json.Segment>(expectedArraySegments));
 
             test(`with ${qub.escapeAndQuote(text)}`, () => {
                 const issues = new qub.ArrayList<qub.Issue>();
@@ -919,94 +919,108 @@ suite("json", () => {
 
                 const array: json.ArraySegment = json.parseArray(tokenizer, issues);
                 assert.deepStrictEqual(array, expectedArray);
+                assert.deepStrictEqual(array.getElements().toArray(), expectedElements);
+                assert.deepStrictEqual(array.getElements().toArray(), expectedElements); // Test it twice since getElements() is cached.
                 assert.deepStrictEqual(issues.toArray(), expectedIssues);
             });
         }
 
-        parseArrayTest(`[`, [json.LeftSquareBracket(0)], [qub.Error(`Missing closing right square bracket ("]").`, new qub.Span(0, 1))]);
-        parseArrayTest(`[ `, [json.LeftSquareBracket(0), parseWhitespace(" ", 1)], [qub.Error(`Missing closing right square bracket ("]").`, new qub.Span(0, 1))]);
+        parseArrayTest(`[`, [json.LeftSquareBracket(0)], [], [qub.Error(`Missing closing right square bracket ("]").`, new qub.Span(0, 1))]);
+        parseArrayTest(`[ `, [json.LeftSquareBracket(0), parseWhitespace(" ", 1)], [], [qub.Error(`Missing closing right square bracket ("]").`, new qub.Span(0, 1))]);
         parseArrayTest(`[]`, [json.LeftSquareBracket(0), json.RightSquareBracket(1)]);
         parseArrayTest(`[ ]`, [json.LeftSquareBracket(0), parseWhitespace(" ", 1), json.RightSquareBracket(2)]);
-        parseArrayTest(`["a"]`, [json.LeftSquareBracket(0), parseQuotedString(`"a"`, 1), json.RightSquareBracket(4)]);
-        parseArrayTest(`[null]`, [json.LeftSquareBracket(0), json.Null(1), json.RightSquareBracket(5)]);
-        parseArrayTest(`[true]`, [json.LeftSquareBracket(0), json.True(1), json.RightSquareBracket(5)]);
-        parseArrayTest(`[false]`, [json.LeftSquareBracket(0), json.False(1), json.RightSquareBracket(6)]);
-        parseArrayTest(`[12345]`, [json.LeftSquareBracket(0), parseNumber("12345", 1), json.RightSquareBracket(6)]);
-        parseArrayTest(`[{`, [json.LeftSquareBracket(0), new json.ObjectSegment([json.LeftCurlyBracket(1)])],
+        parseArrayTest(`["a"]`, [json.LeftSquareBracket(0), parseQuotedString(`"a"`, 1), json.RightSquareBracket(4)], [parseQuotedString(`"a"`, 1)]);
+        parseArrayTest(`[null]`, [json.LeftSquareBracket(0), json.Null(1), json.RightSquareBracket(5)], [json.Null(1)]);
+        parseArrayTest(`[true]`, [json.LeftSquareBracket(0), json.True(1), json.RightSquareBracket(5)], [json.True(1)]);
+        parseArrayTest(`[false]`, [json.LeftSquareBracket(0), json.False(1), json.RightSquareBracket(6)], [json.False(1)]);
+        parseArrayTest(`[12345]`, [json.LeftSquareBracket(0), parseNumber("12345", 1), json.RightSquareBracket(6)], [parseNumber("12345", 1)]);
+        parseArrayTest(`[{`, [json.LeftSquareBracket(0), parseObject("{", 1)],
+            [parseObject("{", 1)],
             [
                 qub.Error(`Missing closing right curly bracket ("}").`, new qub.Span(1, 1)),
                 qub.Error(`Missing closing right square bracket ("]").`, new qub.Span(0, 1))
             ]);
-        parseArrayTest(`[[`, [json.LeftSquareBracket(0), new json.ArraySegment([json.LeftSquareBracket(1)])],
+        parseArrayTest(`[[`, [json.LeftSquareBracket(0), parseArray("[", 1)],
+            [parseArray("[", 1)],
             [
                 qub.Error(`Missing closing right square bracket ("]").`, new qub.Span(1, 1)),
                 qub.Error(`Missing closing right square bracket ("]").`, new qub.Span(0, 1))
             ]);
         parseArrayTest(`["a" "b"]`, [json.LeftSquareBracket(0), parseQuotedString(`"a"`, 1), parseWhitespace(" ", 4), parseQuotedString(`"b"`, 5), json.RightSquareBracket(8)],
+            [parseQuotedString(`"a"`, 1), parseQuotedString(`"b"`, 5)],
             [
                 qub.Error(`Expected comma (",") or closing right square bracket ("]").`, new qub.Span(5, 3))
             ]);
         parseArrayTest(`["a"5]`, [json.LeftSquareBracket(0), parseQuotedString(`"a"`, 1), parseNumber("5", 4), json.RightSquareBracket(5)],
+            [parseQuotedString(`"a"`, 1), parseNumber("5", 4)],
             [
                 qub.Error(`Expected comma (",") or closing right square bracket ("]").`, new qub.Span(4, 1))
             ]);
         parseArrayTest(`["a"true]`, [json.LeftSquareBracket(0), parseQuotedString(`"a"`, 1), json.True(4), json.RightSquareBracket(8)],
+            [parseQuotedString(`"a"`, 1), json.True(4)],
             [
                 qub.Error(`Expected comma (",") or closing right square bracket ("]").`, new qub.Span(4, 4))
             ]);
         parseArrayTest(`["a"{}]`, [json.LeftSquareBracket(0), parseQuotedString(`"a"`, 1), parseObject("{}", 4), json.RightSquareBracket(6)],
+            [parseQuotedString(`"a"`, 1), parseObject("{}", 4)],
             [
                 qub.Error(`Expected comma (",") or closing right square bracket ("]").`, new qub.Span(4, 1))
             ]);
         parseArrayTest(`["a"[]]`, [json.LeftSquareBracket(0), parseQuotedString(`"a"`, 1), parseArray("[]", 4), json.RightSquareBracket(6)],
+            [parseQuotedString(`"a"`, 1), parseArray("[]", 4)],
             [
                 qub.Error(`Expected comma (",") or closing right square bracket ("]").`, new qub.Span(4, 1))
             ]);
         parseArrayTest(`[,]`, [json.LeftSquareBracket(0), json.Comma(1), json.RightSquareBracket(2)],
+            [undefined, undefined],
             [
                 qub.Error(`Expected array element or closing right square bracket ("]").`, new qub.Span(1, 1)),
                 qub.Error(`Expected array element.`, new qub.Span(2, 1))
             ]);
         parseArrayTest(`[2,]`, [json.LeftSquareBracket(0), parseNumber("2", 1), json.Comma(2), json.RightSquareBracket(3)],
+            [parseNumber("2", 1), undefined],
             [
                 qub.Error(`Expected array element.`, new qub.Span(3, 1))
             ]);
         parseArrayTest(`[2,,]`, [json.LeftSquareBracket(0), parseNumber("2", 1), json.Comma(2), json.Comma(3), json.RightSquareBracket(4)],
+            [parseNumber("2", 1), undefined, undefined],
             [
                 qub.Error(`Expected array element.`, new qub.Span(3, 1)),
                 qub.Error(`Expected array element.`, new qub.Span(4, 1))
             ]);
         parseArrayTest(`[true,]`, [json.LeftSquareBracket(0), json.True(1), json.Comma(5), json.RightSquareBracket(6)],
+            [json.True(1), undefined],
             [
                 qub.Error(`Expected array element.`, new qub.Span(6, 1))
             ]);
-        parseArrayTest(`[2,,]`, [json.LeftSquareBracket(0), parseNumber("2", 1), json.Comma(2), json.Comma(3), json.RightSquareBracket(4)],
-            [
-                qub.Error(`Expected array element.`, new qub.Span(3, 1)),
-                qub.Error(`Expected array element.`, new qub.Span(4, 1))
-            ]);
         parseArrayTest(`[false,,]`, [json.LeftSquareBracket(0), json.False(1), json.Comma(6), json.Comma(7), json.RightSquareBracket(8)],
+            [json.False(1), undefined, undefined],
             [
                 qub.Error(`Expected array element.`, new qub.Span(7, 1)),
                 qub.Error(`Expected array element.`, new qub.Span(8, 1))
             ]);
         parseArrayTest(`[)]`, [json.LeftSquareBracket(0), json.Unrecognized(qub.RightParenthesis(1), 1), json.RightSquareBracket(2)],
+            [],
             [
                 qub.Error(`Expected array element or closing right square bracket ("]").`, new qub.Span(1, 1))
             ]);
         parseArrayTest(`[null)]`, [json.LeftSquareBracket(0), json.Null(1), json.Unrecognized(qub.RightParenthesis(5), 5), json.RightSquareBracket(6)],
+            [json.Null(1)],
             [
                 qub.Error(`Expected comma (",") or closing right square bracket ("]").`, new qub.Span(5, 1))
             ]);
         parseArrayTest(`[null,)]`, [json.LeftSquareBracket(0), json.Null(1), json.Comma(5), json.Unrecognized(qub.RightParenthesis(6), 6), json.RightSquareBracket(7)],
+            [json.Null(1), undefined],
             [
                 qub.Error(`Expected array element.`, new qub.Span(6, 1))
             ]);
         parseArrayTest(`[9)]`, [json.LeftSquareBracket(0), parseNumber("9", 1), json.Unrecognized(qub.RightParenthesis(2), 2), json.RightSquareBracket(3)],
+            [parseNumber("9", 1)],
             [
                 qub.Error(`Expected comma (",") or closing right square bracket ("]").`, new qub.Span(2, 1))
             ]);
         parseArrayTest(`[9,)]`, [json.LeftSquareBracket(0), parseNumber("9", 1), json.Comma(2), json.Unrecognized(qub.RightParenthesis(3), 3), json.RightSquareBracket(4)],
+            [parseNumber("9", 1), undefined],
             [
                 qub.Error(`Expected array element.`, new qub.Span(3, 1))
             ]);
@@ -1020,7 +1034,8 @@ suite("json", () => {
                 parseNumber("1", 5),
                 parseNewLine("\n", 6),
                 json.RightSquareBracket(7)
-            ]);
+            ],
+            [parseNumber("0", 2), parseNumber("1", 5)]);
         parseArrayTest(`[\n  //Test comment\n]`,
             [
                 json.LeftSquareBracket(0),
@@ -1042,7 +1057,8 @@ suite("json", () => {
                 parseWhitespace(" ", 22),
                 parseNumber("2", 23),
                 json.RightSquareBracket(24)
-            ]);
+            ],
+            [parseNumber("0", 1), parseNumber("1", 4), parseNumber("2", 23)]);
     });
 
     suite("parseSegment()", () => {
