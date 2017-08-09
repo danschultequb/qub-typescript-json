@@ -1,13 +1,13 @@
 import * as assert from "assert";
 import * as qub from "qub";
 
-import * as json from "../sources/JSON";
+import * as json from "../sources/json";
 
 function parseQubLexes(text: string, startIndex: number = 0): qub.Iterable<qub.Lex> {
     return new qub.Lexer(text, startIndex).toArrayList();
 }
 
-suite("JSON", () => {
+suite("json", () => {
     function parseJsonTokens(text: string, startIndex: number = 0): json.Token[] {
         const tokenizer = new json.Tokenizer(text, startIndex);
         const result: json.Token[] = [];
@@ -1079,6 +1079,7 @@ suite("JSON", () => {
                 const document: json.Document = json.parse(text);
                 assert.deepStrictEqual(document, expectedDocument);
                 assert.deepStrictEqual(document.issues.toArray(), expectedIssues);
+                assert.deepStrictEqual(document.toString(), text ? text : "");
             });
         }
 
