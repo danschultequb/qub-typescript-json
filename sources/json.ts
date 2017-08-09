@@ -581,19 +581,77 @@ export class ObjectSegment extends Segment {
     }
 }
 
+/**
+ * A parsed JSON array.
+ */
 export class ArraySegment extends Segment {
-    constructor(private _segments: Segment[]) {
-        super(_segments[0].startIndex);
+    private _elements: qub.Indexable<Segment>;
+    constructor(private _segments: qub.Iterable<Segment>) {
+        super(_segments.first().startIndex);
     }
 
+    /**
+     * Get the element Segments of this ArraySegment.
+     */
+    public getElements(): qub.Indexable<Segment> {
+        if (!this._elements) {
+            const elements = new qub.ArrayList<Segment>();
+
+            let expectingComma: boolean = false;
+            for (const segment of this._segments) {
+                if (segment instanceof ObjectSegment || segment instanceof ArraySegment) {
+                    elements.add(segment);
+                    expectingComma = true;
+                }
+                else {
+                    const token: Token = segment as Token;
+                    switch (token.getType()) {
+                        case TokenType.False:
+                        case TokenType.Null:
+                        case TokenType.Number:
+                        case TokenType.QuotedString:
+                        case TokenType.True:
+                            elements.add(token);
+                            expectingComma = true;
+                            break;
+
+                        case TokenType.Comma:
+                            if (!expectingComma) {
+                                elements.add(undefined);
+                            }
+                            else {
+                                expectingComma = false;
+                            }
+                            break;
+                    }
+                }
+            }
+            if (elements.any() && !expectingComma) {
+                elements.add(undefined);
+            }
+
+            this._elements = elements;
+        }
+        return this._elements;
+    }
+
+    /**
+     * Get the string representation of this JSON array.
+     */
     public toString(): string {
         return qub.getCombinedText(this._segments);
     }
 
+    /**
+     * Get how many characters make up this JSON array.
+     */
     public getLength(): number {
         return qub.getContiguousLength(this._segments);
     }
 
+    /**
+     * Get the formatted (pretty-printed) string representation of this JSON array.
+     */
     public format(): string {
         let result: string = "";
 
@@ -848,7 +906,7 @@ export function parseObject(tokenizer: Tokenizer, issues: qub.List<qub.Issue>): 
 
 export function parseArray(tokenizer: Tokenizer, issues: qub.List<qub.Issue>): ArraySegment {
     const leftSquareBracket: Token = tokenizer.getCurrent();
-    const arraySegments: Segment[] = [leftSquareBracket];
+    const arraySegments = new qub.ArrayList<Segment>([leftSquareBracket]);
     tokenizer.next();
 
     let rightSquareBracket: Token = null;
@@ -867,7 +925,7 @@ export function parseArray(tokenizer: Tokenizer, issues: qub.List<qub.Issue>): A
                     addIssue(issues, qub.Error(`Expected comma (",") or closing right square bracket ("]").`, currentToken.span));
                 }
 
-                arraySegments.push(currentToken);
+                arraySegments.add(currentToken);
                 tokenizer.next();
 
                 arrayElementAllowed = false;
@@ -880,7 +938,7 @@ export function parseArray(tokenizer: Tokenizer, issues: qub.List<qub.Issue>): A
                     addIssue(issues, qub.Error(`Expected comma (",") or closing right square bracket ("]").`, currentToken.span));
                 }
 
-                arraySegments.push(parseObject(tokenizer, issues));
+                arraySegments.add(parseObject(tokenizer, issues));
 
                 arrayElementAllowed = false;
                 commaAllowed = true;
@@ -892,7 +950,7 @@ export function parseArray(tokenizer: Tokenizer, issues: qub.List<qub.Issue>): A
                     addIssue(issues, qub.Error(`Expected comma (",") or closing right square bracket ("]").`, currentToken.span));
                 }
 
-                arraySegments.push(parseArray(tokenizer, issues));
+                arraySegments.add(parseArray(tokenizer, issues));
 
                 arrayElementAllowed = false;
                 commaAllowed = true;
@@ -909,7 +967,7 @@ export function parseArray(tokenizer: Tokenizer, issues: qub.List<qub.Issue>): A
                     }
                 }
 
-                arraySegments.push(currentToken);
+                arraySegments.add(currentToken);
                 tokenizer.next();
 
                 arrayElementAllowed = true;
@@ -923,7 +981,7 @@ export function parseArray(tokenizer: Tokenizer, issues: qub.List<qub.Issue>): A
                 }
 
                 rightSquareBracket = currentToken;
-                arraySegments.push(rightSquareBracket);
+                arraySegments.add(rightSquareBracket);
                 tokenizer.next();
                 break;
 
@@ -931,7 +989,7 @@ export function parseArray(tokenizer: Tokenizer, issues: qub.List<qub.Issue>): A
             case TokenType.Whitespace:
             case TokenType.LineComment:
             case TokenType.BlockComment:
-                arraySegments.push(currentToken);
+                arraySegments.add(currentToken);
                 tokenizer.next();
                 break;
 
@@ -948,7 +1006,7 @@ export function parseArray(tokenizer: Tokenizer, issues: qub.List<qub.Issue>): A
                     addIssue(issues, qub.Error(`Expected comma (",") or closing right square bracket ("]").`, currentToken.span));
                 }
 
-                arraySegments.push(currentToken);
+                arraySegments.add(currentToken);
                 tokenizer.next();
 
                 arrayElementAllowed = false;
