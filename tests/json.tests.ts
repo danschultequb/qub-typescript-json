@@ -8,17 +8,12 @@ function parseQubLexes(text: string, startIndex: number = 0): qub.Iterable<qub.L
 }
 
 suite("json", () => {
-    function parseJsonTokens(text: string, startIndex: number = 0): json.Token[] {
-        const tokenizer = new json.Tokenizer(text, startIndex);
-        const result: json.Token[] = [];
-        while (tokenizer.next()) {
-            result.push(tokenizer.getCurrent());
-        }
-        return result;
+    function parseJsonTokens(text: string, startIndex: number = 0, issues: qub.List<qub.Issue>): qub.Iterable<json.Token> {
+        return new json.Tokenizer(text, startIndex, issues).toArrayList();
     }
 
-    function parseJsonToken(text: string, startIndex: number, expectedTokenType: json.TokenType): json.Token {
-        const tokenizer = new json.Tokenizer(text, startIndex);
+    function parseJsonToken(text: string, startIndex: number, expectedTokenType: json.TokenType, issues: qub.List<qub.Issue>): json.Token {
+        const tokenizer = new json.Tokenizer(text, startIndex, issues);
         assert.deepStrictEqual(tokenizer.next(), true, "Wrong next() result");
         assert.deepStrictEqual(tokenizer.getCurrent().getType(), expectedTokenType, "Wrong type");
         return tokenizer.getCurrent();
@@ -27,36 +22,36 @@ suite("json", () => {
     /**
      * Parse a QuotedString json.Token from the provided text.
      */
-    function parseQuotedString(text: string, startIndex: number = 0): json.Token {
-        return parseJsonToken(text, startIndex, json.TokenType.QuotedString);
+    function parseQuotedString(text: string, startIndex: number = 0, issues?: qub.List<qub.Issue>): json.Token {
+        return parseJsonToken(text, startIndex, json.TokenType.QuotedString, issues);
     }
 
     /**
      * Parse a Number json.Token from the provided text.
      */
-    function parseNumber(text: string, startIndex: number = 0): json.Token {
-        return parseJsonToken(text, startIndex, json.TokenType.Number);
+    function parseNumber(text: string, startIndex: number = 0, issues?: qub.List<qub.Issue>): json.Token {
+        return parseJsonToken(text, startIndex, json.TokenType.Number, issues);
     }
 
     /**
      * Parse a Whitespace json.Token from the provided text.
      */
-    function parseWhitespace(text: string, startIndex: number = 0): json.Token {
-        return parseJsonToken(text, startIndex, json.TokenType.Whitespace);
+    function parseWhitespace(text: string, startIndex: number = 0, issues?: qub.List<qub.Issue>): json.Token {
+        return parseJsonToken(text, startIndex, json.TokenType.Whitespace, issues);
     }
 
     /**
      * Parse a NewLine json.Token from the provided text.
      */
-    function parseNewLine(text: string, startIndex: number = 0): json.Token {
-        return parseJsonToken(text, startIndex, json.TokenType.NewLine);
+    function parseNewLine(text: string, startIndex: number = 0, issues?: qub.List<qub.Issue>): json.Token {
+        return parseJsonToken(text, startIndex, json.TokenType.NewLine, issues);
     }
 
     /**
      * Parse a JSON Property segment from the provided text.
      */
-    function parseProperty(text: string, startIndex: number = 0): json.Property {
-        const tokenizer = new json.Tokenizer(text, startIndex);
+    function parseProperty(text: string, startIndex: number = 0, issues?: qub.List<qub.Issue>): json.Property {
+        const tokenizer = new json.Tokenizer(text, startIndex, issues);
         assert.deepStrictEqual(tokenizer.next(), true);
         assert.deepStrictEqual(tokenizer.getCurrent().getType(), json.TokenType.QuotedString);
         return json.parseProperty(tokenizer);
@@ -65,38 +60,38 @@ suite("json", () => {
     /**
      * Parse a LineComment json.Token from the provided text.
      */
-    function parseLineComment(text: string, startIndex: number = 0): json.Token {
-        return parseJsonToken(text, startIndex, json.TokenType.LineComment);
+    function parseLineComment(text: string, startIndex: number = 0, issues?: qub.List<qub.Issue>): json.Token {
+        return parseJsonToken(text, startIndex, json.TokenType.LineComment, issues);
     }
 
     /**
      * Parse a BlockComment json.Tegment from the provided text.
      */
-    function parseBlockComment(text: string, startIndex: number = 0): json.Token {
-        return parseJsonToken(text, startIndex, json.TokenType.BlockComment);
+    function parseBlockComment(text: string, startIndex: number = 0, issues?: qub.List<qub.Issue>): json.Token {
+        return parseJsonToken(text, startIndex, json.TokenType.BlockComment, issues);
     }
 
     /**
      * Parse a JSON Object segment from the provided text.
      */
-    function parseObject(text: string, startIndex: number = 0): json.ObjectSegment {
-        const tokenizer = new json.Tokenizer(text, startIndex);
+    function parseObject(text: string, startIndex: number = 0, issues?: qub.List<qub.Issue>): json.ObjectSegment {
+        const tokenizer = new json.Tokenizer(text, startIndex, issues);
         tokenizer.next();
         assert.deepStrictEqual(tokenizer.hasCurrent(), true);
         assert.deepStrictEqual(tokenizer.getCurrent(), json.LeftCurlyBracket(startIndex));
-        return json.parseObject(tokenizer);
+        return json.parseObject(tokenizer, issues);
     }
 
     /**
      * Parse a JSON Array segment from the provided text.
      */
-    function parseArray(text: string, startIndex: number = 0): json.ArraySegment {
-        const tokenizer = new json.Tokenizer(text, startIndex);
+    function parseArray(text: string, startIndex: number = 0, issues?: qub.List<qub.Issue>): json.ArraySegment {
+        const tokenizer = new json.Tokenizer(text, startIndex, issues);
         assert(tokenizer.next());
         assert(tokenizer.getCurrent() instanceof json.Token);
         const currentToken: json.Token = tokenizer.getCurrent() as json.Token;
         assert.deepStrictEqual(currentToken.getType(), json.TokenType.LeftSquareBracket);
-        return json.parseArray(tokenizer);
+        return json.parseArray(tokenizer, issues);
     }
 
     test("Token", () => {
@@ -302,7 +297,8 @@ suite("json", () => {
                 }
 
                 test(`with ${qub.escapeAndQuote(text)}`, () => {
-                    const tokenizer = new json.Tokenizer(text);
+                    const issues = new qub.ArrayList<qub.Issue>();
+                    const tokenizer = new json.Tokenizer(text, 0, issues);
 
                     if (expectedSegments) {
                         for (const expectedSegment of expectedSegments as json.Segment[]) {
@@ -320,7 +316,7 @@ suite("json", () => {
                         assert.deepStrictEqual(tokenizer.getCurrent(), undefined);
                     }
 
-                    assert.deepStrictEqual(tokenizer.issues.toArray(), expectedIssues);
+                    assert.deepStrictEqual(issues.toArray(), expectedIssues);
                 });
             }
 
@@ -642,7 +638,7 @@ suite("json", () => {
         function documentTest(documentSegments: json.Segment[], formattedText: string = qub.getCombinedText(documentSegments)): void {
             const expectedText: string = qub.getCombinedText(documentSegments);
             test(`with ${qub.escapeAndQuote(expectedText)}`, () => {
-                const document = new json.Document(documentSegments, new qub.ArrayList<qub.Issue>());
+                const document = new json.Document(documentSegments);
                 assert.deepStrictEqual(document.toString(), expectedText);
                 assert.deepStrictEqual(document.format(), formattedText);
                 assert.deepStrictEqual(document.getLength(), qub.getCombinedLength(documentSegments));
@@ -710,12 +706,13 @@ suite("json", () => {
             const expectedProperty = new json.Property(expectedPropertySegments);
 
             test(`with ${qub.escapeAndQuote(text)}`, () => {
-                const tokenizer = new json.Tokenizer(text);
+                const issues = new qub.ArrayList<qub.Issue>();
+                const tokenizer = new json.Tokenizer(text, 0, issues);
                 tokenizer.next();
 
-                const property: json.Property = json.parseProperty(tokenizer);
+                const property: json.Property = json.parseProperty(tokenizer, issues);
                 assert.deepStrictEqual(property, expectedProperty);
-                assert.deepStrictEqual(tokenizer.issues.toArray(), expectedIssues);
+                assert.deepStrictEqual(issues.toArray(), expectedIssues);
             });
         }
 
@@ -749,12 +746,13 @@ suite("json", () => {
             const expectedObject = new json.ObjectSegment(expectedObjectSegments);
 
             test(`with ${qub.escapeAndQuote(text)}`, () => {
-                const tokenizer = new json.Tokenizer(text);
+                const issues = new qub.ArrayList<qub.Issue>();
+                const tokenizer = new json.Tokenizer(text, 0, issues);
                 tokenizer.next();
 
-                const object: json.ObjectSegment = json.parseObject(tokenizer);
+                const object: json.ObjectSegment = json.parseObject(tokenizer, issues);
                 assert.deepStrictEqual(object, expectedObject);
-                assert.deepStrictEqual(tokenizer.issues.toArray(), expectedIssues);
+                assert.deepStrictEqual(issues.toArray(), expectedIssues);
             });
         }
 
@@ -907,12 +905,13 @@ suite("json", () => {
             const expectedArray = new json.ArraySegment(expectedArraySegments);
 
             test(`with ${qub.escapeAndQuote(text)}`, () => {
-                const tokenizer = new json.Tokenizer(text);
+                const issues = new qub.ArrayList<qub.Issue>();
+                const tokenizer = new json.Tokenizer(text, 0, issues);
                 tokenizer.next();
 
-                const array: json.ArraySegment = json.parseArray(tokenizer);
+                const array: json.ArraySegment = json.parseArray(tokenizer, issues);
                 assert.deepStrictEqual(array, expectedArray);
-                assert.deepStrictEqual(tokenizer.issues.toArray(), expectedIssues);
+                assert.deepStrictEqual(issues.toArray(), expectedIssues);
             });
         }
 
@@ -1041,12 +1040,13 @@ suite("json", () => {
     suite("parseSegment()", () => {
         function parseSegmentTest(text: string, expectedSegment: json.Segment, expectedIssues: qub.Issue[] = []): void {
             test(`with ${qub.escapeAndQuote(text)}`, () => {
-                const tokenizer = new json.Tokenizer(text);
+                const issues = new qub.ArrayList<qub.Issue>();
+                const tokenizer = new json.Tokenizer(text, 0, issues);
                 tokenizer.next();
 
-                const segment: json.Segment = json.parseSegment(tokenizer);
+                const segment: json.Segment = json.parseSegment(tokenizer, issues);
                 assert.deepStrictEqual(segment, expectedSegment);
-                assert.deepStrictEqual(tokenizer.issues.toArray(), expectedIssues);
+                assert.deepStrictEqual(issues.toArray(), expectedIssues);
             });
         }
 
@@ -1073,13 +1073,14 @@ suite("json", () => {
 
     suite("parse()", () => {
         function parseTest(text: string, expectedDocumentSegments: json.Segment[], expectedIssues: qub.Issue[] = []): void {
-            const expectedDocument = new json.Document(expectedDocumentSegments, new qub.ArrayList(expectedIssues));
-
             test(`with ${qub.escapeAndQuote(text)}`, () => {
-                const document: json.Document = json.parse(text);
+                const expectedDocument = new json.Document(expectedDocumentSegments);
+
+                const issues = new qub.ArrayList<qub.Issue>();
+                const document: json.Document = json.parse(text, issues);
                 assert.deepStrictEqual(document, expectedDocument);
-                assert.deepStrictEqual(document.issues.toArray(), expectedIssues);
                 assert.deepStrictEqual(document.toString(), text ? text : "");
+                assert.deepStrictEqual(issues.toArray(), expectedIssues);
             });
         }
 
