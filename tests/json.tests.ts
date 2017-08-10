@@ -582,6 +582,110 @@ suite("json", () => {
         objectTest([json.LeftCurlyBracket(0), parseQuotedString(`"0"`, 1), parseWhitespace("   ", 4), json.Null(7), json.RightCurlyBracket(11)], `{"0" null}`);
         objectTest([json.LeftCurlyBracket(0), parseQuotedString(`"0"`, 1), parseNumber("1", 4), json.RightCurlyBracket(5)], `{"0" 1}`);
         objectTest([json.LeftCurlyBracket(0), parseQuotedString(`"0"`, 1), parseWhitespace("   ", 4), parseNumber("1", 7), json.RightCurlyBracket(8)], `{"0" 1}`);
+
+        suite("getProperty()", () => {
+            function getPropertyTest(objectString: string, propertyName: string, expectedProperty?: json.Property): void {
+                test(`with object ${qub.escapeAndQuote(objectString)} and propertyName ${qub.escapeAndQuote(propertyName)}`, () => {
+                    const objectSegment: json.ObjectSegment = parseObject(objectString);
+                    const property: json.Property = objectSegment.getProperty(propertyName);
+                    assert.deepStrictEqual(property, expectedProperty);
+                });
+            }
+
+            getPropertyTest(`{}`, undefined);
+            getPropertyTest(`{}`, null);
+            getPropertyTest(`{}`, ``);
+            getPropertyTest(`{}`, `a`);
+            getPropertyTest(`{}`, `"a"`);
+            getPropertyTest(`{ "a" }`, undefined);
+            getPropertyTest(`{ "a" }`, null);
+            getPropertyTest(`{ "a" }`, ``);
+            getPropertyTest(`{ "a" }`, `a`, parseProperty(`"a" `, 2));
+            getPropertyTest(`{ "a" }`, `"a"`, parseProperty(`"a" `, 2));
+            getPropertyTest(`{ "a" }`, `'a'`);
+            getPropertyTest(`{ "a" }`, `b`);
+            getPropertyTest(`{ "a" }`, `"b"`);
+            getPropertyTest(`{ "a" }`, `'b'`);
+            getPropertyTest(`{ "a": }`, undefined);
+            getPropertyTest(`{ "a": }`, null);
+            getPropertyTest(`{ "a": }`, ``);
+            getPropertyTest(`{ "a": }`, `a`, parseProperty(`"a": `, 2));
+            getPropertyTest(`{ "a": }`, `"a"`, parseProperty(`"a": `, 2));
+            getPropertyTest(`{ "a": }`, `'a'`);
+            getPropertyTest(`{ "a": }`, `b`);
+            getPropertyTest(`{ "a": }`, `"b"`);
+            getPropertyTest(`{ "a": }`, `'b'`);
+            getPropertyTest(`{ "a": 5 }`, undefined);
+            getPropertyTest(`{ "a": 5 }`, null);
+            getPropertyTest(`{ "a": 5 }`, ``);
+            getPropertyTest(`{ "a": 5 }`, `a`, parseProperty(`"a": 5`, 2));
+            getPropertyTest(`{ "a": 5 }`, `"a"`, parseProperty(`"a": 5`, 2));
+            getPropertyTest(`{ "a": 5 }`, `'a'`);
+            getPropertyTest(`{ "a": 5 }`, `b`);
+            getPropertyTest(`{ "a": 5 }`, `"b"`);
+            getPropertyTest(`{ "a": 5 }`, `'b'`);
+            getPropertyTest(`{ "a": 5, "a": 6 }`, undefined);
+            getPropertyTest(`{ "a": 5, "a": 6 }`, null);
+            getPropertyTest(`{ "a": 5, "a": 6 }`, ``);
+            getPropertyTest(`{ "a": 5, "a": 6 }`, `a`, parseProperty(`"a": 5`, 2));
+            getPropertyTest(`{ "a": 5, "a": 6 }`, `"a"`, parseProperty(`"a": 5`, 2));
+            getPropertyTest(`{ "a": 5, "a": 6 }`, `'a'`);
+            getPropertyTest(`{ "a": 5, "a": 6 }`, `b`);
+            getPropertyTest(`{ "a": 5, "a": 6 }`, `"b"`);
+            getPropertyTest(`{ "a": 5, "a": 6 }`, `'b'`);
+        });
+
+        suite("getPropertyValue()", () => {
+            function getPropertyValueTest(objectString: string, propertyName: string, expectedPropertyValue?: json.Segment): void {
+                test(`with object ${qub.escapeAndQuote(objectString)} and propertyName ${qub.escapeAndQuote(propertyName)}`, () => {
+                    const objectSegment: json.ObjectSegment = parseObject(objectString);
+                    const propertyValue: json.Segment = objectSegment.getPropertyValue(propertyName);
+                    assert.deepStrictEqual(propertyValue, expectedPropertyValue);
+                });
+            }
+
+            getPropertyValueTest(`{}`, undefined);
+            getPropertyValueTest(`{}`, null);
+            getPropertyValueTest(`{}`, ``);
+            getPropertyValueTest(`{}`, `a`);
+            getPropertyValueTest(`{}`, `"a"`);
+            getPropertyValueTest(`{ "a" }`, undefined);
+            getPropertyValueTest(`{ "a" }`, null);
+            getPropertyValueTest(`{ "a" }`, ``);
+            getPropertyValueTest(`{ "a" }`, `a`);
+            getPropertyValueTest(`{ "a" }`, `"a"`);
+            getPropertyValueTest(`{ "a" }`, `'a'`);
+            getPropertyValueTest(`{ "a" }`, `b`);
+            getPropertyValueTest(`{ "a" }`, `"b"`);
+            getPropertyValueTest(`{ "a" }`, `'b'`);
+            getPropertyValueTest(`{ "a": }`, undefined);
+            getPropertyValueTest(`{ "a": }`, null);
+            getPropertyValueTest(`{ "a": }`, ``);
+            getPropertyValueTest(`{ "a": }`, `a`);
+            getPropertyValueTest(`{ "a": }`, `"a"`);
+            getPropertyValueTest(`{ "a": }`, `'a'`);
+            getPropertyValueTest(`{ "a": }`, `b`);
+            getPropertyValueTest(`{ "a": }`, `"b"`);
+            getPropertyValueTest(`{ "a": }`, `'b'`);
+            getPropertyValueTest(`{ "a": 5 }`, undefined);
+            getPropertyValueTest(`{ "a": 5 }`, null);
+            getPropertyValueTest(`{ "a": 5 }`, ``);
+            getPropertyValueTest(`{ "a": 5 }`, `a`, parseNumber("5", 7));
+            getPropertyValueTest(`{ "a": 5 }`, `"a"`, parseNumber("5", 7));
+            getPropertyValueTest(`{ "a": 5 }`, `'a'`);
+            getPropertyValueTest(`{ "a": 5 }`, `b`);
+            getPropertyValueTest(`{ "a": 5 }`, `"b"`);
+            getPropertyValueTest(`{ "a": 5 }`, `'b'`);
+            getPropertyValueTest(`{ "a": 5, "a": 6 }`, undefined);
+            getPropertyValueTest(`{ "a": 5, "a": 6 }`, null);
+            getPropertyValueTest(`{ "a": 5, "a": 6 }`, ``);
+            getPropertyValueTest(`{ "a": 5, "a": 6 }`, `a`, parseNumber("5", 7));
+            getPropertyValueTest(`{ "a": 5, "a": 6 }`, `"a"`, parseNumber("5", 7));
+            getPropertyValueTest(`{ "a": 5, "a": 6 }`, `'a'`);
+            getPropertyValueTest(`{ "a": 5, "a": 6 }`, `b`);
+            getPropertyValueTest(`{ "a": 5, "a": 6 }`, `"b"`);
+            getPropertyValueTest(`{ "a": 5, "a": 6 }`, `'b'`);
+        });
     });
 
     suite("ArraySegment", () => {
