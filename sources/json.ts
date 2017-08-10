@@ -589,6 +589,34 @@ export class ObjectSegment extends Segment {
             .map((segment: Segment) => segment as Property);
     }
 
+    /**
+     * Get the first property in this ObjectSegment with the provided propertyName. The provided
+     * propertyName will be compared against the quoted and unquoted names of each of the properties
+     * in this ObjectSegment.
+     * @param propertyName The name of the property to search for.
+     */
+    public getProperty(propertyName: string): Property {
+        return this.getProperties().first((property: Property) => {
+            const name: Token = property.getName();
+            const quotedNameString: string = name.toString();
+            return propertyName == quotedNameString || propertyName == qub.unquote(quotedNameString);
+        });
+    }
+
+    /**
+     * Get the first property value in this ObjectSegment with the provided propertyName. The
+     * provided propertyName will be compared against the quoted and unquoted names of each of the
+     * properties in this ObjectSegment.
+     * @param propertyName The name of the property to search for.
+     */
+    public getPropertyValue(propertyName: string): Segment {
+        const property: Property = this.getProperty(propertyName);
+        return property ? property.getValue() : undefined;
+    }
+
+    /**
+     * Get the string representation of this JSON ObjectSegment.
+     */
     public toString(): string {
         return qub.getCombinedText(this._segments);
     }
