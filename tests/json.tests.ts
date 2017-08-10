@@ -736,6 +736,86 @@ suite("json", () => {
         arrayTest([json.LeftSquareBracket(0), json.Null(1), parseNumber("1", 5), json.RightSquareBracket(6)], `[null 1]`);
         arrayTest([json.LeftSquareBracket(0), json.Null(1), parseWhitespace(" ", 5), json.True(6), json.RightSquareBracket(10)], `[null true]`);
         arrayTest([json.LeftSquareBracket(0), parseQuotedString(`"a"`, 1), parseWhitespace(" ", 4), parseQuotedString(`"b"`, 5), json.RightSquareBracket(8)], `["a" "b"]`);
+
+        suite("getElementCount()", () => {
+            function getElementCountTest(arrayString: string, expectedElementCount: number): void {
+                test(`with ${qub.escapeAndQuote(arrayString)}`, () => {
+                    const arraySegment: json.ArraySegment = parseArray(arrayString);
+                    assert.deepStrictEqual(arraySegment.getElementCount(), expectedElementCount);
+                });
+            }
+
+            getElementCountTest("[", 0);
+            getElementCountTest("[]", 0);
+            getElementCountTest("[ ]", 0);
+            getElementCountTest("[,", 2);
+            getElementCountTest("[,]", 2);
+            getElementCountTest("[ ,", 2);
+            getElementCountTest("[ , ]", 2);
+            getElementCountTest("[5", 1);
+            getElementCountTest("[5]", 1);
+            getElementCountTest("[5,", 2);
+            getElementCountTest("[5,]", 2);
+            getElementCountTest("[5,false", 2);
+            getElementCountTest("[5,false]", 2);
+        });
+
+        suite("getElement()", () => {
+            function getElementTest(arrayString: string, index: number, expectedElement?: json.Segment): void {
+                test(`with ${qub.escapeAndQuote(arrayString)}`, () => {
+                    const arraySegment: json.ArraySegment = parseArray(arrayString);
+                    assert.deepStrictEqual(arraySegment.getElement(index), expectedElement);
+                });
+            }
+
+            getElementTest("[", -1);
+            getElementTest("[", 0);
+            getElementTest("[", 1);
+            getElementTest("[]", -1);
+            getElementTest("[]", 0);
+            getElementTest("[]", 1);
+            getElementTest("[ ]", -1);
+            getElementTest("[ ]", 0);
+            getElementTest("[ ]", 1);
+            getElementTest("[,", -1);
+            getElementTest("[,", 0);
+            getElementTest("[,", 1);
+            getElementTest("[,", 2);
+            getElementTest("[,]", -1);
+            getElementTest("[,]", 0);
+            getElementTest("[,]", 1);
+            getElementTest("[,]", 2);
+            getElementTest("[ ,", -1);
+            getElementTest("[ ,", 0);
+            getElementTest("[ ,", 1);
+            getElementTest("[ ,", 2);
+            getElementTest("[ , ]", -1);
+            getElementTest("[ , ]", 0);
+            getElementTest("[ , ]", 1);
+            getElementTest("[ , ]", 2);
+            getElementTest("[5", -1);
+            getElementTest("[5", 0, parseNumber("5", 1));
+            getElementTest("[5", 1);
+            getElementTest("[5]", -1);
+            getElementTest("[5]", 0, parseNumber("5", 1));
+            getElementTest("[5]", 1);
+            getElementTest("[5,", -1);
+            getElementTest("[5,", 0, parseNumber("5", 1));
+            getElementTest("[5,", 1);
+            getElementTest("[5,", 2);
+            getElementTest("[5,]", -1);
+            getElementTest("[5,]", 0, parseNumber("5", 1));
+            getElementTest("[5,]", 1);
+            getElementTest("[5,]", 2);
+            getElementTest("[5,false", -1);
+            getElementTest("[5,false", 0, parseNumber("5", 1));
+            getElementTest("[5,false", 1, json.False(3));
+            getElementTest("[5,false", 2);
+            getElementTest("[5,false]", -1);
+            getElementTest("[5,false]", 0, parseNumber("5", 1));
+            getElementTest("[5,false]", 1, json.False(3));
+            getElementTest("[5,false]", 2);
+        });
     });
 
     suite("Document", () => {
