@@ -725,6 +725,24 @@ export class ArraySegment extends Segment {
     }
 
     /**
+     * Get the number of elements in this ArraySegment.
+     */
+    public getElementCount(): number {
+        return this.getElements().getCount();
+    }
+
+    /**
+     * Get the element at the provided index. If the index is outside of this ArraySegments bounds
+     * (index < 0 || this.getElementCount() <= index), then undefined will be returned. Undefined
+     * may also be returned if no element exists for the provided ArraySegment, such as if the
+     * element at index 1 is requested when the ArraySegment looks like "[,,]".
+     * @param index The index of the element to get.
+     */
+    public getElement(index: number): Segment {
+        return this.getElements().get(index);
+    }
+
+    /**
      * Get the string representation of this JSON array.
      */
     public toString(): string {
